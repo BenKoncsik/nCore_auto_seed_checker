@@ -102,8 +102,9 @@ func main() {
 	log("Analyzing HTML to find torrents with 'Stopped' status...")
 
 	var rows []*cdp.Node
+	var urlsToDownload []string
 	err = chromedp.Run(ctx,
-		chromedp.Nodes(`div.hnr_all2`, &rows, chromedp.ByQueryAll),
+		chromedp.Nodes(`div[class^="hnr_all"]`, &rows, chromedp.ByQueryAll),
 	)
 	if err != nil {
 		log("Error: ", err)
@@ -112,9 +113,10 @@ func main() {
 
 	log(fmt.Sprintf("Found %d rows in total.", len(rows)))
 
-	for i, row := range rows {
+	for i := 0; i < len(rows); i++ {
 		var rowHTML string
-		err = chromedp.Run(ctx, chromedp.OuterHTML(`div.hnr_all2`, &rowHTML, chromedp.FromNode(row)))
+		err = chromedp.Run(ctx, chromedp.OuterHTML(`div[class^="hnr_all"]`, &rowHTML, chromedp.FromNode(rows[i])))
+
 		if err != nil {
 			log("Error: ", err)
 			continue
@@ -123,46 +125,53 @@ func main() {
 		if strings.Contains(rowHTML, "Stopped") {
 			log(fmt.Sprintf("Extracting link from row %d...", i+1))
 			var torrentLink string
-			err = chromedp.Run(ctx, chromedp.AttributeValue(`a[href^="torrents.php?"]`, "href", &torrentLink, nil, chromedp.FromNode(row)))
+			err = chromedp.Run(ctx, chromedp.AttributeValue(`a[href^="torrents.php?"]`, "href", &torrentLink, nil, chromedp.ByQuery, chromedp.FromNode(rows[i])))
 			if err != nil {
 				log("Error extracting torrent link: ", err)
 				continue
 			}
 			if torrentLink != "" {
 				torrentUrl := "https://ncore.pro/" + strings.ReplaceAll(torrentLink, "&amp;", "&")
-				log("Opening torrent page: ", torrentUrl)
-				err = chromedp.Run(ctx, chromedp.Navigate(torrentUrl))
-				if err != nil {
-					log("Error while clicking: ", err)
-					continue
-				}
-				chromedp.OuterHTML(`html`, &body, chromedp.ByQuery)
-				if *debug {
-					log("Loaded HTML page: ")
-					log(body)
-				}
-
-				// Step 4: Find and download the torrent link
-				var downloadLink string
-				var torrentName string
-				err = chromedp.Run(ctx,
-					chromedp.WaitReady(`div.download a[href*="action=download"]`, chromedp.ByQuery),
-					chromedp.AttributeValue(`div.download a[href*="action=download"]`, "href", &downloadLink, nil, chromedp.ByQuery),
-					chromedp.Text(`div.torrent_reszletek_cim`, &torrentName, chromedp.ByQuery),
-				)
-				if err != nil {
-					log("Error finding download link or torrent name: ", err)
-					continue
-				}
-
-				if downloadLink != "" {
-					downloadUrl := "https://ncore.pro/" + strings.ReplaceAll(downloadLink, "&amp;", "&")
-					log("Torrent download link: ", downloadUrl)
-					downloadFile(downloadUrl, log, torrentName+".torrent")
-				}
+				log("Adding torrent URL: ", torrentUrl)
+				urlsToDownload = append(urlsToDownload, torrentUrl)
 			}
 		}
 	}
+	// Step 4. Process and download torrents from the URLs
+	for _, torrentUrl := range urlsToDownload {
+		log("Opening torrent page: ", torrentUrl)
+		err = chromedp.Run(ctx, chromedp.Navigate(torrentUrl))
+		if err != nil {
+			log("Error while clicking: ", err)
+			continue
+		}
+
+		chromedp.OuterHTML(`html`, &body, chromedp.ByQuery)
+		if *debug {
+			log("Loaded HTML page: ")
+			log(body)
+		}
+
+		// Step 4: Find and download the torrent link
+		var downloadLink string
+		var torrentName string
+		err = chromedp.Run(ctx,
+			chromedp.WaitReady(`div.download a[href*="action=download"]`, chromedp.ByQuery),
+			chromedp.AttributeValue(`div.download a[href*="action=download"]`, "href", &downloadLink, nil, chromedp.ByQuery),
+			chromedp.Text(`div.torrent_reszletek_cim`, &torrentName, chromedp.ByQuery),
+		)
+		if err != nil {
+			log("Error finding download link or torrent name: ", err)
+			continue
+		}
+
+		if downloadLink != "" {
+			downloadUrl := "https://ncore.pro/" + strings.ReplaceAll(downloadLink, "&amp;", "&")
+			log("Torrent download link: ", downloadUrl)
+			downloadFile(downloadUrl, log, torrentName+".torrent")
+		}
+	}
+
 }
 
 func downloadFile(downloadUrl string, log func(v ...interface{}), fileName string) {
