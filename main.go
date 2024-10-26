@@ -16,6 +16,19 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
+var (
+	loginUrl    = "https://ncore.pro/login.php?honnan=/hitnrun.php"
+	activityUrl = "https://ncore.pro/hitnrun.php"
+	loginData   = struct {
+		Nev  string
+		Pass string
+	}{
+		Nev:  "",
+		Pass: "",
+	}
+	outputDir = ""
+)
+
 func main() {
 	debug := flag.Bool("d", false, "Enable debug logging to log.txt")
 	flag.Parse()
@@ -105,10 +118,10 @@ func main() {
 
 	matches := stoppedRegex.FindAllString(body, -1)
 
-	log(fmt.Sprintf("Összesen %d 'Stopped' státuszú sor található.", len(matches)))
+	log(fmt.Sprintf("Found %d rows with 'Stopped' status.", len(matches)))
 
 	for i, match := range matches {
-		log(fmt.Sprintf("%d. sor: %s", i+1, match))
+		log(fmt.Sprintf("Row %d: %s", i+1, match))
 
 		linkRegex := regexp.MustCompile(`<a href="(torrents\.php\?action=details[^"]*)"`)
 		linkMatch := linkRegex.FindStringSubmatch(match)
@@ -117,7 +130,7 @@ func main() {
 		if len(linkMatch) > 1 {
 			torrentLink := linkMatch[1]
 			torrentUrl := "https://ncore.pro/" + strings.ReplaceAll(torrentLink, "&amp;", "&")
-			log("Torrent oldal megnyitása: ", torrentUrl, "File name: ", fileName)
+			log("Opening torrent page: ", torrentUrl, "File name: ", fileName)
 			downloadTorrent(ctx, torrentUrl, fileName[len(fileName)-1], log)
 		}
 	}
@@ -131,18 +144,18 @@ func downloadTorrent(ctx context.Context, torrentUrl string, fileName string, lo
 		chromedp.OuterHTML(`html`, &body, chromedp.ByQuery),
 	)
 	if err != nil {
-		log("Hiba az oldal megnyitása közben: ", err)
+		log("Error opening the page: ", err)
 		return
 	}
 
-	// Torrent letöltési link keresése és letöltése
+	// Search and download torrent link
 	linkRegex := regexp.MustCompile(`<div class="download">.*?<a [^>]*href="(torrents\.php\?action=download[^"]*)"`)
 	linkMatch := linkRegex.FindStringSubmatch(body)
 
 	if len(linkMatch) > 1 {
 		downloadLink := linkMatch[1]
 		downloadUrl := "https://ncore.pro/" + strings.ReplaceAll(downloadLink, "&amp;", "&")
-		log("Torrent letöltési link: ", downloadUrl)
+		log("Torrent download link: ", downloadUrl)
 		downloadFile(downloadUrl, log, fileName+".torrent")
 	}
 }
