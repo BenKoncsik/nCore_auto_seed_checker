@@ -1,6 +1,6 @@
 # Ncore Auto Seed Checker
 
-Ez egy Ncore oldalhoz készült automatikus seed checker GO alkalmazás.
+Ez egy nCore.pro oldalhoz készült automatikus seed checker GO alkalmazás.
 
 ## Használati útmutató
 
