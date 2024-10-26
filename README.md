@@ -15,11 +15,14 @@ Ez egy Ncore oldalhoz készült automatikus seed checker GO alkalmazás.
    - **Figyelem:** Ez az alkalmazás **nem tölti vissza a torrentet**, hanem egy tetszőleges torrent alkalmazásba kell beállítani, hogy ugyanabba a mappába töltse le a torrent fájlokat, ahol automatikusan hozzáadja őket a torrent alkalmazáshoz.
 
 4. **Alkalmazás buildelése:**
+   - Szükséges kiegészítők:
+      - go get github.com/chromedp/chromedp
+      - go get github.com/chromedp/cdproto/cdp 
    - Windows rendszeren: `go build -o ncore_automation.exe main.go`
    - Linux rendszeren: `go build -o ncore_automation main.go`
    - Futtasd le a fenti parancsot a letöltött fájl mappájában.
 
-5. **Alkalmazás futtatása:**
+6. **Alkalmazás futtatása:**
    - A program ezután már futtatható vagy ütemezhető, ez már a felhasználó választása. 😄
 
 -d kapcsolóval log.txt-be logol
