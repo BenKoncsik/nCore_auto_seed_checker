@@ -8,24 +8,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
-)
-
-var (
-	loginUrl    = "https://ncore.pro/login.php?honnan=/hitnrun.php"
-	activityUrl = "https://ncore.pro/hitnrun.php"
-	loginData   = struct {
-		Nev  string
-		Pass string
-	}{
-		Nev:  "",
-		Pass: "",
-	}
-	outputDir = ""
 )
 
 func main() {
@@ -102,7 +90,7 @@ func main() {
 	log("Analyzing HTML to find torrents with 'Stopped' status...")
 
 	var rows []*cdp.Node
-	var urlsToDownload []string
+	//var urlsToDownload []string
 	err = chromedp.Run(ctx,
 		chromedp.Nodes(`div[class^="hnr_all"]`, &rows, chromedp.ByQueryAll),
 	)
@@ -113,65 +101,50 @@ func main() {
 
 	log(fmt.Sprintf("Found %d rows in total.", len(rows)))
 
-	for i := 0; i < len(rows); i++ {
-		var rowHTML string
-		err = chromedp.Run(ctx, chromedp.OuterHTML(`div[class^="hnr_all"]`, &rowHTML, chromedp.FromNode(rows[i])))
+	stoppedRegex := regexp.MustCompile(`<div class="[^"]*hnr_all[^"]*"[^>]*>[\s\S]*?<div class="[^"]*hnr_tseed[^"]*"[^>]*>[\s\S]*?<span class="stopped">Stopped<\/span>[\s\S]*?<\/div>`)
 
-		if err != nil {
-			log("Error: ", err)
-			continue
-		}
+	matches := stoppedRegex.FindAllString(body, -1)
 
-		if strings.Contains(rowHTML, "Stopped") {
-			log(fmt.Sprintf("Extracting link from row %d...", i+1))
-			var torrentLink string
-			err = chromedp.Run(ctx, chromedp.AttributeValue(`a[href^="torrents.php?"]`, "href", &torrentLink, nil, chromedp.ByQuery, chromedp.FromNode(rows[i])))
-			if err != nil {
-				log("Error extracting torrent link: ", err)
-				continue
-			}
-			if torrentLink != "" {
-				torrentUrl := "https://ncore.pro/" + strings.ReplaceAll(torrentLink, "&amp;", "&")
-				log("Adding torrent URL: ", torrentUrl)
-				urlsToDownload = append(urlsToDownload, torrentUrl)
-			}
+	log(fmt.Sprintf("Összesen %d 'Stopped' státuszú sor található.", len(matches)))
+
+	for i, match := range matches {
+		log(fmt.Sprintf("%d. sor: %s", i+1, match))
+
+		linkRegex := regexp.MustCompile(`<a href="(torrents\.php\?action=details[^"]*)"`)
+		linkMatch := linkRegex.FindStringSubmatch(match)
+		fileNameRegex := regexp.MustCompile(`<a[^>]*title="([^"]+)"`)
+		fileName := fileNameRegex.FindStringSubmatch(match)
+		if len(linkMatch) > 1 {
+			torrentLink := linkMatch[1]
+			torrentUrl := "https://ncore.pro/" + strings.ReplaceAll(torrentLink, "&amp;", "&")
+			log("Torrent oldal megnyitása: ", torrentUrl, "File name: ", fileName)
+			downloadTorrent(ctx, torrentUrl, fileName[len(fileName)-1], log)
 		}
 	}
-	// Step 4. Process and download torrents from the URLs
-	for _, torrentUrl := range urlsToDownload {
-		log("Opening torrent page: ", torrentUrl)
-		err = chromedp.Run(ctx, chromedp.Navigate(torrentUrl))
-		if err != nil {
-			log("Error while clicking: ", err)
-			continue
-		}
+}
 
-		chromedp.OuterHTML(`html`, &body, chromedp.ByQuery)
-		if *debug {
-			log("Loaded HTML page: ")
-			log(body)
-		}
-
-		// Step 4: Find and download the torrent link
-		var downloadLink string
-		var torrentName string
-		err = chromedp.Run(ctx,
-			chromedp.WaitReady(`div.download a[href*="action=download"]`, chromedp.ByQuery),
-			chromedp.AttributeValue(`div.download a[href*="action=download"]`, "href", &downloadLink, nil, chromedp.ByQuery),
-			chromedp.Text(`div.torrent_reszletek_cim`, &torrentName, chromedp.ByQuery),
-		)
-		if err != nil {
-			log("Error finding download link or torrent name: ", err)
-			continue
-		}
-
-		if downloadLink != "" {
-			downloadUrl := "https://ncore.pro/" + strings.ReplaceAll(downloadLink, "&amp;", "&")
-			log("Torrent download link: ", downloadUrl)
-			downloadFile(downloadUrl, log, torrentName+".torrent")
-		}
+func downloadTorrent(ctx context.Context, torrentUrl string, fileName string, log func(v ...interface{})) {
+	var body string
+	err := chromedp.Run(ctx,
+		chromedp.Navigate(torrentUrl),
+		chromedp.WaitReady(`body`, chromedp.ByQuery),
+		chromedp.OuterHTML(`html`, &body, chromedp.ByQuery),
+	)
+	if err != nil {
+		log("Hiba az oldal megnyitása közben: ", err)
+		return
 	}
 
+	// Torrent letöltési link keresése és letöltése
+	linkRegex := regexp.MustCompile(`<div class="download">.*?<a [^>]*href="(torrents\.php\?action=download[^"]*)"`)
+	linkMatch := linkRegex.FindStringSubmatch(body)
+
+	if len(linkMatch) > 1 {
+		downloadLink := linkMatch[1]
+		downloadUrl := "https://ncore.pro/" + strings.ReplaceAll(downloadLink, "&amp;", "&")
+		log("Torrent letöltési link: ", downloadUrl)
+		downloadFile(downloadUrl, log, fileName+".torrent")
+	}
 }
 
 func downloadFile(downloadUrl string, log func(v ...interface{}), fileName string) {
