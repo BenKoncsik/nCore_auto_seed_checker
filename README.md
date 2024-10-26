@@ -22,6 +22,8 @@ Ez egy Ncore oldalhoz készült automatikus seed checker GO alkalmazás.
 5. **Alkalmazás futtatása:**
    - A program ezután már futtatható vagy ütemezhető, ez már a felhasználó választása. 😄
 
+-d kapcsolóval log.txt-be logol
+
 ---
 
 **Fontos:** Semmilyen felelősséget nem vállalok jogsértő tartalom terjesztéséért, ez az alkalmazás csak a manuális lépéseket váltja ki.
