@@ -1,5 +1,39 @@
 # nCore Auto Seed Checker
 
+This is a GO application designed as an automatic seed checker for the nCore.pro website.
+
+## User Guide
+
+1. **URL Verification:** After downloading, verify the URLs in the `main.go` file:
+   - `loginUrl`: this should point to `login.php`.
+   - `activityUrl`: this should point to `hitnrun.php`.
+
+2. **Filling in Login Information:** Fill in the `loginData` variables with your username and password.
+
+3. **Setting the Output Directory:**
+   - The `outputDir` variable defines where the `.torrent` files will be saved.
+   - **Note:** This application **does not re-download the torrents**, you need to set your torrent client to download the torrent files into the same folder, where they will be automatically added to the torrent client.
+
+4. **Building the Application:**
+   - Required dependencies:
+      - `go get github.com/chromedp/chromedp`
+      - `go get github.com/chromedp/cdproto/cdp`
+   - On Windows: `go build -o ncore_automation.exe main.go`
+   - On Linux: `go build -o ncore_automation main.go`
+   - Run the above command in the directory where the downloaded file is located.
+
+5. **Running the Application:**
+   - The program can now be run or scheduled, depending on the user's choice. 😄
+
+   Use the `-d` flag to enable logging to `log.txt`.
+
+---
+
+**Important:** I am not responsible for any illegal content distribution. This application only automates manual steps.
+
+HUN
+# nCore Auto Seed Checker
+
 Ez egy nCore.pro oldalhoz készült automatikus seed checker GO alkalmazás.
 
 ## Használati útmutató
