@@ -14,6 +14,7 @@ import (
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
+	"golang.org/x/net/html"
 )
 
 var (
@@ -45,9 +46,11 @@ func main() {
 	}
 
 	log := func(v ...interface{}) {
-		fmt.Println(v...)
+		currentTime := time.Now().Format("2006-01-02 15:04:05")
+		logMessage := fmt.Sprintf("%s %v", currentTime, fmt.Sprintln(v...))
+		fmt.Println(logMessage)
 		if *debug {
-			fmt.Fprintln(logFile, v...)
+			fmt.Fprintln(logFile, logMessage)
 		}
 	}
 
@@ -113,10 +116,34 @@ func main() {
 	}
 
 	log(fmt.Sprintf("Found %d rows in total.", len(rows)))
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		panic(err)
+	}
+	var matches []string
+	var f func(*html.Node)
+	f = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "div" {
+			for _, attr := range n.Attr {
+				if attr.Key == "class" && (strings.HasPrefix(attr.Val, "hnr_all") || strings.HasPrefix(attr.Val, "hnr_all2")) {
+					if containsStopped(n) {
+						var buf strings.Builder
+						html.Render(&buf, n)
+						matches = append(matches, buf.String())
+					}
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			f(c)
+		}
+	}
 
-	stoppedRegex := regexp.MustCompile(`<div class="[^"]*hnr_all[^"]*"[^>]*>[\s\S]*?<div class="[^"]*hnr_tseed[^"]*"[^>]*>[\s\S]*?<span class="stopped">Stopped<\/span>[\s\S]*?<\/div>`)
+	f(doc)
 
-	matches := stoppedRegex.FindAllString(body, -1)
+	for i, div := range matches {
+		fmt.Printf("Found div #%d:\n%s\n\n", i+1, div)
+	}
 
 	log(fmt.Sprintf("Found %d rows with 'Stopped' status.", len(matches)))
 
@@ -125,18 +152,18 @@ func main() {
 
 		linkRegex := regexp.MustCompile(`<a href="(torrents\.php\?action=details[^"]*)"`)
 		linkMatch := linkRegex.FindStringSubmatch(match)
-		fileNameRegex := regexp.MustCompile(`<a[^>]*title="([^"]+)"`)
-		fileName := fileNameRegex.FindStringSubmatch(match)
+
 		if len(linkMatch) > 1 {
+			log("Opening torrent page: ", linkMatch[1], "Match: ", match)
 			torrentLink := linkMatch[1]
 			torrentUrl := "https://ncore.pro/" + strings.ReplaceAll(torrentLink, "&amp;", "&")
-			log("Opening torrent page: ", torrentUrl, "File name: ", fileName)
-			downloadTorrent(ctx, torrentUrl, fileName[len(fileName)-1], log)
+
+			downloadTorrent(ctx, torrentUrl, match, log)
 		}
 	}
 }
 
-func downloadTorrent(ctx context.Context, torrentUrl string, fileName string, log func(v ...interface{})) {
+func downloadTorrent(ctx context.Context, torrentUrl string, match string, log func(v ...interface{})) {
 	var body string
 	err := chromedp.Run(ctx,
 		chromedp.Navigate(torrentUrl),
@@ -149,14 +176,17 @@ func downloadTorrent(ctx context.Context, torrentUrl string, fileName string, lo
 	}
 
 	// Search and download torrent link
+	fileNameRegex := regexp.MustCompile(`<a[^>]*title="([^"]+)"`)
+	fileName := fileNameRegex.FindStringSubmatch(match)
+
 	linkRegex := regexp.MustCompile(`<div class="download">.*?<a [^>]*href="(torrents\.php\?action=download[^"]*)"`)
 	linkMatch := linkRegex.FindStringSubmatch(body)
-
+	log("Link match: ", len(linkMatch))
 	if len(linkMatch) > 1 {
 		downloadLink := linkMatch[1]
 		downloadUrl := "https://ncore.pro/" + strings.ReplaceAll(downloadLink, "&amp;", "&")
-		log("Torrent download link: ", downloadUrl)
-		downloadFile(downloadUrl, log, fileName+".torrent")
+		log("Opening torrent page: ", torrentUrl, "Torrent download link: ", downloadUrl, " file name: ", fileName)
+		downloadFile(downloadUrl, log, fileName[len(fileName)-1]+".torrent")
 	}
 }
 
@@ -209,4 +239,23 @@ func downloadFile(downloadUrl string, log func(v ...interface{}), fileName strin
 	}
 
 	log("File successfully downloaded and saved: ", outputPath)
+}
+
+func containsStopped(n *html.Node) bool {
+	if n.Type == html.ElementNode && n.Data == "span" {
+		for _, attr := range n.Attr {
+			if attr.Key == "class" && attr.Val == "stopped" {
+				if n.FirstChild != nil && n.FirstChild.Type == html.TextNode && strings.TrimSpace(n.FirstChild.Data) == "Stopped" {
+					return true
+				}
+			}
+		}
+	}
+	// Rekurzívan bejárjuk a gyermek node-okat
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if containsStopped(c) {
+			return true
+		}
+	}
+	return false
 }
