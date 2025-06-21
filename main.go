@@ -4,7 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,39 +24,41 @@ var (
 	loginData   = struct {
 		Nev  string
 		Pass string
-	}{
-		Nev:  "",
-		Pass: "",
-	}
-	outputDir = ""
+	}{}
+	outputDir string
 )
 
 func main() {
 	debug := flag.Bool("d", false, "Enable debug logging to log.txt")
+	user := flag.String("u", "", "nCore username")
+	pass := flag.String("p", "", "nCore password")
+	outDir := flag.String("o", "", "Directory to store downloaded torrents")
 	flag.Parse()
 
-	var logFile *os.File
+	if *user == "" || *pass == "" || *outDir == "" {
+		fmt.Println("username, password and output directory are required")
+		flag.Usage()
+		return
+	}
+
+	loginData.Nev = *user
+	loginData.Pass = *pass
+	outputDir = *outDir
+
 	var err error
+	logger := log.New(os.Stdout, "", log.LstdFlags)
 	if *debug {
-		logFile, err = os.OpenFile("log.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		logFile, err := os.OpenFile("log.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
-			fmt.Println("Error opening log file: ", err)
+			fmt.Println("Error opening log file:", err)
 			os.Exit(1)
 		}
 		defer logFile.Close()
-	}
-
-	log := func(v ...interface{}) {
-		currentTime := time.Now().Format("2006-01-02 15:04:05")
-		logMessage := fmt.Sprintf("%s %v", currentTime, fmt.Sprintln(v...))
-		fmt.Println(logMessage)
-		if *debug {
-			fmt.Fprintln(logFile, logMessage)
-		}
+		logger.SetOutput(io.MultiWriter(os.Stdout, logFile))
 	}
 
 	// Start Chrome
-	ctx, cancel := chromedp.NewContext(context.Background(), chromedp.WithLogf(func(s string, i ...interface{}) { log(fmt.Sprintf(s, i...)) }))
+	ctx, cancel := chromedp.NewContext(context.Background(), chromedp.WithLogf(logger.Printf))
 	defer cancel()
 
 	// Set timeout
@@ -74,36 +77,36 @@ func main() {
 		chromedp.OuterHTML(`html`, &body, chromedp.ByQuery),
 	)
 	if err != nil {
-		log("Error: ", err)
+		logger.Println("Error:", err)
 		os.Exit(1)
 	}
 
 	// Verify if login was successful
 	if !strings.Contains(body, loginData.Nev) {
-		log("Login failed, username not found on the page.")
+		logger.Println("Login failed, username not found on the page.")
 		os.Exit(1)
 	}
-	log("Login successful.")
+	logger.Println("Login successful.")
 
 	// Open activity page
-	log("Opening activity page...")
+	logger.Println("Opening activity page...")
 	err = chromedp.Run(ctx,
 		chromedp.Navigate(activityUrl),
 		chromedp.WaitReady(`body`, chromedp.ByQuery),
 		chromedp.OuterHTML(`html`, &body, chromedp.ByQuery),
 	)
 	if err != nil {
-		log("Error: ", err)
+		logger.Println("Error:", err)
 		os.Exit(1)
 	}
 
 	if *debug {
-		log("HTML content: ")
-		log(body)
+		logger.Println("HTML content:")
+		logger.Println(body)
 	}
 
 	// Step 3: Find torrents with "Stopped" status and click on them
-	log("Analyzing HTML to find torrents with 'Stopped' status...")
+	logger.Println("Analyzing HTML to find torrents with 'Stopped' status...")
 
 	var rows []*cdp.Node
 	//var urlsToDownload []string
@@ -111,11 +114,11 @@ func main() {
 		chromedp.Nodes(`div[class^="hnr_all"]`, &rows, chromedp.ByQueryAll),
 	)
 	if err != nil {
-		log("Error: ", err)
+		logger.Println("Error:", err)
 		os.Exit(1)
 	}
 
-	log(fmt.Sprintf("Found %d rows in total.", len(rows)))
+	logger.Printf("Found %d rows in total.", len(rows))
 	doc, err := html.Parse(strings.NewReader(body))
 	if err != nil {
 		panic(err)
@@ -145,25 +148,25 @@ func main() {
 		fmt.Printf("Found div #%d:\n%s\n\n", i+1, div)
 	}
 
-	log(fmt.Sprintf("Found %d rows with 'Stopped' status.", len(matches)))
+	logger.Printf("Found %d rows with 'Stopped' status.", len(matches))
 
 	for i, match := range matches {
-		log(fmt.Sprintf("Row %d: %s", i+1, match))
+		logger.Printf("Row %d: %s", i+1, match)
 
 		linkRegex := regexp.MustCompile(`<a href="(torrents\.php\?action=details[^"]*)"`)
 		linkMatch := linkRegex.FindStringSubmatch(match)
 
 		if len(linkMatch) > 1 {
-			log("Opening torrent page: ", linkMatch[1], "Match: ", match)
+			logger.Println("Opening torrent page:", linkMatch[1], "Match:", match)
 			torrentLink := linkMatch[1]
 			torrentUrl := "https://ncore.pro/" + strings.ReplaceAll(torrentLink, "&amp;", "&")
 
-			downloadTorrent(ctx, torrentUrl, match, log)
+			downloadTorrent(ctx, torrentUrl, match, logger)
 		}
 	}
 }
 
-func downloadTorrent(ctx context.Context, torrentUrl string, match string, log func(v ...interface{})) {
+func downloadTorrent(ctx context.Context, torrentUrl string, match string, logger *log.Logger) {
 	var body string
 	err := chromedp.Run(ctx,
 		chromedp.Navigate(torrentUrl),
@@ -171,7 +174,7 @@ func downloadTorrent(ctx context.Context, torrentUrl string, match string, log f
 		chromedp.OuterHTML(`html`, &body, chromedp.ByQuery),
 	)
 	if err != nil {
-		log("Error opening the page: ", err)
+		logger.Println("Error opening the page:", err)
 		return
 	}
 
@@ -181,45 +184,45 @@ func downloadTorrent(ctx context.Context, torrentUrl string, match string, log f
 
 	linkRegex := regexp.MustCompile(`<div class="download">.*?<a [^>]*href="(torrents\.php\?action=download[^"]*)"`)
 	linkMatch := linkRegex.FindStringSubmatch(body)
-	log("Link match: ", len(linkMatch))
+	logger.Println("Link match:", len(linkMatch))
 	if len(linkMatch) > 1 {
 		downloadLink := linkMatch[1]
 		downloadUrl := "https://ncore.pro/" + strings.ReplaceAll(downloadLink, "&amp;", "&")
-		log("Opening torrent page: ", torrentUrl, "Torrent download link: ", downloadUrl, " file name: ", fileName)
-		downloadFile(downloadUrl, log, fileName[len(fileName)-1]+".torrent")
+		logger.Println("Opening torrent page:", torrentUrl, "Torrent download link:", downloadUrl, "file name:", fileName)
+		downloadFile(downloadUrl, logger, fileName[len(fileName)-1]+".torrent")
 	}
 }
 
-func downloadFile(downloadUrl string, log func(v ...interface{}), fileName string) {
+func downloadFile(downloadUrl string, logger *log.Logger, fileName string) {
 	sanitizeFileName := func(name string) string {
 		name = strings.ReplaceAll(name, "?", "_")
 		name = strings.ReplaceAll(name, "&", "_")
 		name = strings.ReplaceAll(name, "=", "_")
 		return name
 	}
-	log("Downloading file: ", downloadUrl)
+	logger.Println("Downloading file:", downloadUrl)
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", downloadUrl, nil)
 	if err != nil {
-		log("Error: ", err)
+		logger.Println("Error:", err)
 		os.Exit(1)
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log("Error: ", err)
+		logger.Println("Error:", err)
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log("Error: ", resp.StatusCode)
+		logger.Println("Error:", resp.StatusCode)
 		os.Exit(1)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log("Error: ", err)
+		logger.Println("Error:", err)
 		os.Exit(1)
 	}
 
@@ -228,17 +231,17 @@ func downloadFile(downloadUrl string, log func(v ...interface{}), fileName strin
 
 	// Create output directory if it does not exist
 	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
-		log("Error: ", err)
+		logger.Println("Error:", err)
 		os.Exit(1)
 	}
 
 	// Write file
-	if err := ioutil.WriteFile(outputPath, body, 0644); err != nil {
-		log("Error: ", err)
+	if err := os.WriteFile(outputPath, body, 0644); err != nil {
+		logger.Println("Error:", err)
 		os.Exit(1)
 	}
 
-	log("File successfully downloaded and saved: ", outputPath)
+	logger.Println("File successfully downloaded and saved:", outputPath)
 }
 
 func containsStopped(n *html.Node) bool {
