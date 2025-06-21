@@ -8,10 +8,12 @@ This is a GO application designed as an automatic seed checker for the nCore.pro
    - `loginUrl`: this should point to `login.php`.
    - `activityUrl`: this should point to `hitnrun.php`.
 
-2. **Filling in Login Information:** Fill in the `loginData` variables with your username and password.
+2. **Filling in Login Information:** Provide your username and password using command line flags:
+   - `-u your_username`
+   - `-p your_password`
 
 3. **Setting the Output Directory:**
-   - The `outputDir` variable defines where the `.torrent` files will be saved.
+   - Specify the directory using the `-o` flag.
    - **Note:** This application **does not re-download the torrents**, you need to set your torrent client to download the torrent files into the same folder, where they will be automatically added to the torrent client.
 
 4. **Building the Application:**
@@ -42,10 +44,12 @@ Ez egy nCore.pro oldalhoz készült automatikus seed checker GO alkalmazás.
    - `loginUrl`: ennek a `login.php`-ra kell vezetnie.
    - `activityUrl`: ennek a `hitnrun.php`-ra kell vezetnie.
    
-2. **Login adatok kitöltése:** A `loginData` változókat töltsd ki a felhasználóneveddel és a jelszavaddal.
+2. **Login adatok megadása:** Add meg a felhasználónevedet és jelszavadat parancssori kapcsolókkal:
+   - `-u felhasznalonev`
+   - `-p jelszo`
 
-3. **Kimeneti könyvtár beállítása:** 
-   - Az `outputDir` változó határozza meg, hova kerülnek a `.torrent` fájlok.
+3. **Kimeneti könyvtár beállítása:**
+   - Az `-o` kapcsolóval adhatod meg, hova kerüljenek a letöltött `.torrent` fájlok.
    - **Figyelem:** Ez az alkalmazás **nem tölti vissza a torrentet**, hanem egy tetszőleges torrent alkalmazásba kell beállítani, hogy ugyanabba a mappába töltse le a torrent fájlokat, ahol automatikusan hozzáadja őket a torrent alkalmazáshoz.
 
 4. **Alkalmazás buildelése:**
