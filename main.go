@@ -13,12 +13,19 @@ import (
 	"ncore_automation/pkg/web"
 )
 
+func envOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
 func main() {
 	debug := flag.Bool("d", false, "Enable debug logging to log.txt")
-	user := flag.String("u", "", "nCore username")
-	pass := flag.String("p", "", "nCore password")
-	outDir := flag.String("o", "", "Directory to store downloaded torrents")
-	port := flag.String("port", "8080", "Web interface port")
+	user := flag.String("u", envOrDefault("NCORE_USER", ""), "nCore username")
+	pass := flag.String("p", envOrDefault("NCORE_PASS", ""), "nCore password")
+	outDir := flag.String("o", envOrDefault("OUTPUT_DIR", ""), "Directory to store downloaded torrents")
+	port := flag.String("port", envOrDefault("PORT", "8080"), "Web interface port")
 	flag.Parse()
 
 	if *user == "" || *pass == "" || *outDir == "" {

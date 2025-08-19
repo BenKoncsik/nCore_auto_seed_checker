@@ -25,6 +25,9 @@ var (
 )
 
 func chromeExecPath() string {
+	if p := os.Getenv("CHROME_PATH"); p != "" {
+		return p
+	}
 	if runtime.GOOS != "windows" {
 		return ""
 	}
