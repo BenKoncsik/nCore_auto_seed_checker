@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 
+	"ncore_automation/pkg/logfile"
 	"ncore_automation/pkg/ncore"
 	"ncore_automation/pkg/web"
 )
@@ -50,6 +51,7 @@ func main() {
 	go func() {
 		if err := ncore.Run(ctx, *user, *pass, *outDir, logger, statusChan); err != nil {
 			logger.Println("ncore run error:", err)
+			logfile.Append(err)
 		}
 	}()
 

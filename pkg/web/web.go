@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"ncore_automation/pkg/logfile"
 )
 
 // LogBuffer stores recent log lines.
@@ -156,6 +158,7 @@ func Run(port string, logger *log.Logger, logBuf *LogBuffer, status *StatusStore
 			}
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				logger.Println("HTTP server error:", err)
+				logfile.Append(fmt.Errorf("HTTP server error: %w", err))
 			}
 		}()
 		newPort := <-portChan
