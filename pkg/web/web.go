@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -63,6 +64,44 @@ func (s *StatusStore) Entries() []string {
 	return append([]string(nil), s.entries...)
 }
 
+func localIPs() []string {
+	var ips []string
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return []string{"127.0.0.1"}
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil || ip.IsLoopback() {
+				continue
+			}
+			ip = ip.To4()
+			if ip == nil {
+				continue
+			}
+			ips = append(ips, ip.String())
+		}
+	}
+	if len(ips) == 0 {
+		ips = append(ips, "127.0.0.1")
+	}
+	return ips
+}
+
 // Run starts the HTTP server and listens for port change requests via portChan.
 func Run(port string, logger *log.Logger, logBuf *LogBuffer, status *StatusStore, portChan chan string) {
 	currentPort := port
@@ -112,6 +151,9 @@ func Run(port string, logger *log.Logger, logBuf *LogBuffer, status *StatusStore
 		srv := &http.Server{Addr: ":" + currentPort, Handler: mux}
 		go func() {
 			logger.Println("Starting web server on port", currentPort)
+			for _, ip := range localIPs() {
+				logger.Printf("Web UI available at http://%s:%s\n", ip, currentPort)
+			}
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				logger.Println("HTTP server error:", err)
 			}
