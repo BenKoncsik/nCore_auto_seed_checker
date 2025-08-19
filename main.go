@@ -74,10 +74,14 @@ func main() {
 		chromedp.SendKeys(`[name="pass"]`, loginData.Pass, chromedp.ByQuery),
 		chromedp.Click(`[type="submit"]`, chromedp.ByQuery),
 		chromedp.WaitReady(`a[href*="hitnrun"]`, chromedp.ByQuery),
-		chromedp.OuterHTML(`html`, &body, chromedp.ByQuery),
 	)
 	if err != nil {
-		logger.Println("Error:", err)
+		logger.Println("Login navigation failed:", err)
+		os.Exit(1)
+	}
+
+	if err = chromedp.Run(ctx, chromedp.Evaluate(`document.documentElement.outerHTML`, &body)); err != nil {
+		logger.Println("Failed to retrieve login page HTML:", err)
 		os.Exit(1)
 	}
 
@@ -93,10 +97,14 @@ func main() {
 	err = chromedp.Run(ctx,
 		chromedp.Navigate(activityUrl),
 		chromedp.WaitReady(`body`, chromedp.ByQuery),
-		chromedp.OuterHTML(`html`, &body, chromedp.ByQuery),
 	)
 	if err != nil {
-		logger.Println("Error:", err)
+		logger.Println("Activity page navigation failed:", err)
+		os.Exit(1)
+	}
+
+	if err = chromedp.Run(ctx, chromedp.Evaluate(`document.documentElement.outerHTML`, &body)); err != nil {
+		logger.Println("Failed to retrieve activity page HTML:", err)
 		os.Exit(1)
 	}
 
@@ -171,10 +179,14 @@ func downloadTorrent(ctx context.Context, torrentUrl string, match string, logge
 	err := chromedp.Run(ctx,
 		chromedp.Navigate(torrentUrl),
 		chromedp.WaitReady(`body`, chromedp.ByQuery),
-		chromedp.OuterHTML(`html`, &body, chromedp.ByQuery),
 	)
 	if err != nil {
-		logger.Println("Error opening the page:", err)
+		logger.Println("Error loading torrent page:", err)
+		return
+	}
+
+	if err = chromedp.Run(ctx, chromedp.Evaluate(`document.documentElement.outerHTML`, &body)); err != nil {
+		logger.Println("Failed to retrieve torrent page HTML:", err)
 		return
 	}
 
