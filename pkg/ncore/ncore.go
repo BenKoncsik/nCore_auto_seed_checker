@@ -70,34 +70,36 @@ func Run(ctx context.Context, user, pass, outDir string, logger *log.Logger, sta
 	ctx, cancel = context.WithTimeout(ctx, 240*time.Second)
 	defer cancel()
 
-	var body string
-	err := chromedp.Run(ctx,
-		chromedp.Navigate(loginURL),
-		chromedp.WaitReady(`#nev`, chromedp.ByID),
-		chromedp.SendKeys(`#nev`, loginData.Nev, chromedp.ByID),
-		chromedp.SendKeys(`[name="pass"]`, loginData.Pass, chromedp.ByQuery),
-		chromedp.Click(`[type="submit"]`, chromedp.ByQuery),
-		chromedp.WaitReady(`a[href*="hitnrun"]`, chromedp.ByQuery),
-		chromedp.OuterHTML(`html`, &body, chromedp.ByQuery),
-	)
-	if err != nil {
-		return err
-	}
+        var body string
+        err := chromedp.Run(ctx,
+                chromedp.Navigate(loginURL),
+                chromedp.WaitReady(`#nev`, chromedp.ByID),
+                chromedp.SendKeys(`#nev`, loginData.Nev, chromedp.ByID),
+                chromedp.SendKeys(`[name="pass"]`, loginData.Pass, chromedp.ByQuery),
+                chromedp.Click(`[type="submit"]`, chromedp.ByQuery),
+                chromedp.WaitReady(`a[href*="hitnrun"]`, chromedp.ByQuery),
+                chromedp.Evaluate(`document.documentElement.outerHTML`, &body),
+        )
+        if err != nil {
+                logger.Printf("failed to capture login page DOM: %v", err)
+                return err
+        }
 
 	if !strings.Contains(body, loginData.Nev) {
 		return fmt.Errorf("login failed, username not found on the page")
 	}
 	logger.Println("Login successful.")
 
-	logger.Println("Opening activity page...")
-	err = chromedp.Run(ctx,
-		chromedp.Navigate(activityURL),
-		chromedp.WaitReady(`body`, chromedp.ByQuery),
-		chromedp.OuterHTML(`html`, &body, chromedp.ByQuery),
-	)
-	if err != nil {
-		return err
-	}
+        logger.Println("Opening activity page...")
+        err = chromedp.Run(ctx,
+                chromedp.Navigate(activityURL),
+                chromedp.WaitReady(`body`, chromedp.ByQuery),
+                chromedp.Evaluate(`document.documentElement.outerHTML`, &body),
+        )
+        if err != nil {
+                logger.Printf("failed to capture activity page DOM: %v", err)
+                return err
+        }
 
 	logger.Println("Analyzing HTML to find torrents with 'Stopped' status...")
 
@@ -147,27 +149,31 @@ func Run(ctx context.Context, user, pass, outDir string, logger *log.Logger, sta
 }
 
 func downloadTorrent(ctx context.Context, torrentURL, match string, logger *log.Logger, outputDir string, status chan<- string) {
-	var body string
-	err := chromedp.Run(ctx,
-		chromedp.Navigate(torrentURL),
-		chromedp.WaitReady(`body`, chromedp.ByQuery),
-		chromedp.OuterHTML(`html`, &body, chromedp.ByQuery),
-	)
-	if err != nil {
-		logger.Println("Error opening the page:", err)
-		return
-	}
+        var body string
+        err := chromedp.Run(ctx,
+                chromedp.Navigate(torrentURL),
+                chromedp.WaitReady(`body`, chromedp.ByQuery),
+                chromedp.Evaluate(`document.documentElement.outerHTML`, &body),
+        )
+        if err != nil {
+                logger.Println("Error opening the page:", err)
+                return
+        }
 
 	fileNameRegex := regexp.MustCompile(`<a[^>]*title="([^"]+)"`)
-	fileName := fileNameRegex.FindStringSubmatch(match)
+        fileName := fileNameRegex.FindStringSubmatch(match)
 
-	linkRegex := regexp.MustCompile(`<div class="download">.*?<a [^>]*href="(torrents\.php\?action=download[^"]*)"`)
-	linkMatch := linkRegex.FindStringSubmatch(body)
-	if len(linkMatch) > 1 {
-		downloadLink := linkMatch[1]
-		downloadURL := "https://ncore.pro/" + strings.ReplaceAll(downloadLink, "&amp;", "&")
-		downloadFile(downloadURL, logger, fileName[len(fileName)-1]+".torrent", outputDir, status)
-	}
+        linkRegex := regexp.MustCompile(`<div class="download">.*?<a [^>]*href="(torrents\.php\?action=download[^"]*)"`)
+        linkMatch := linkRegex.FindStringSubmatch(body)
+        if len(linkMatch) > 1 && len(fileName) > 1 {
+                downloadLink := linkMatch[1]
+                downloadURL := "https://ncore.pro/" + strings.ReplaceAll(downloadLink, "&amp;", "&")
+                downloadFile(downloadURL, logger, fileName[len(fileName)-1]+".torrent", outputDir, status)
+        } else if len(linkMatch) <= 1 {
+                logger.Println("download link not found on details page")
+        } else {
+                logger.Println("filename not found; skipping download")
+        }
 }
 
 func downloadFile(downloadURL string, logger *log.Logger, fileName string, outputDir string, status chan<- string) {
