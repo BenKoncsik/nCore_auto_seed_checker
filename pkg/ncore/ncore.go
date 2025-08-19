@@ -7,8 +7,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
@@ -22,6 +24,27 @@ var (
 	activityURL = "https://ncore.pro/hitnrun.php"
 )
 
+func chromeExecPath() string {
+	if runtime.GOOS != "windows" {
+		return ""
+	}
+	paths := []string{
+		`C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe`,
+		`C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe`,
+		`C:\\Program Files\\Chromium\\Application\\chrome.exe`,
+		`C:\\Program Files (x86)\\Chromium\\Application\\chrome.exe`,
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	if p, err := exec.LookPath("chrome.exe"); err == nil {
+		return p
+	}
+	return ""
+}
+
 // Run logs in to nCore and downloads torrents with "Stopped" status.
 // Status messages about downloaded files are sent to the provided channel.
 func Run(ctx context.Context, user, pass, outDir string, logger *log.Logger, status chan<- string) error {
@@ -31,7 +54,14 @@ func Run(ctx context.Context, user, pass, outDir string, logger *log.Logger, sta
 	}{user, pass}
 	outputDir := outDir
 
-	ctx, cancel := chromedp.NewContext(ctx, chromedp.WithLogf(logger.Printf))
+	opts := []chromedp.ExecAllocatorOption{}
+	if p := chromeExecPath(); p != "" {
+		opts = append(opts, chromedp.ExecPath(p))
+	}
+	allocCtx, cancel := chromedp.NewExecAllocator(ctx, opts...)
+	defer cancel()
+
+	ctx, cancel = chromedp.NewContext(allocCtx, chromedp.WithLogf(logger.Printf))
 	defer cancel()
 
 	ctx, cancel = context.WithTimeout(ctx, 240*time.Second)
