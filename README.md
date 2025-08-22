@@ -29,6 +29,12 @@ This is a GO application designed as an automatic seed checker for the nCore.pro
 
    Use the `-d` flag to enable logging to `log.txt`.
 
+6. **Running with Docker:**
+   - Build the Docker image:
+     `docker build -t ncore-automation .`
+   - Run the container with credentials and paths via environment variables:
+     `docker run -e NCORE_USER=your_username -e NCORE_PASS=your_password -e OUTPUT_DIR=/downloads -e PORT=8080 -p 8080:8080 -v /host/path:/downloads ncore-automation`
+
 ---
 
 **Important:** I am not responsible for any illegal content distribution. This application only automates manual steps.
@@ -64,6 +70,12 @@ Ez egy nCore.pro oldalhoz készült automatikus seed checker GO alkalmazás.
    - A program ezután már futtatható vagy ütemezhető, ez már a felhasználó választása. 😄
 
 -d kapcsolóval log.txt-be logol
+
+7. **Docker használata:**
+   - Docker image buildelése:
+     `docker build -t ncore-automation .`
+   - Konténer futtatása környezeti változókkal:
+     `docker run -e NCORE_USER=felhasznalonev -e NCORE_PASS=jelszo -e OUTPUT_DIR=/downloads -e PORT=8080 -p 8080:8080 -v /host/path:/downloads ncore-automation`
 
 ---
 
