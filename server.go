@@ -8,13 +8,14 @@ import (
 	"net/http"
 )
 
-func startWebServer() {
-	log.Println("Starting web server on :8080...")
+func startWebServer(port int) {
+	addr := fmt.Sprintf(":%d", port)
+	log.Printf("Starting web server on %s...", addr)
 
 	http.HandleFunc("/", handleIndex)
 	http.HandleFunc("/api/history", handleHistory)
 
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatal("Server failed:", err)
 	}
 }

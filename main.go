@@ -24,6 +24,7 @@ func main() {
 	outDir := flag.String("o", "", "Directory to store downloaded torrents")
 	webMode := flag.Bool("web", false, "Start web interface")
 	interval := flag.Duration("interval", 0, "Check interval (e.g. 10m). If 0, runs once.")
+	port := flag.Int("port", 8080, "Web server port")
 	flag.Parse()
 
 	if (*user == "" || *pass == "" || *outDir == "") && !*webMode {
@@ -36,7 +37,7 @@ func main() {
 	// For now, let's assume we want to run the checker UNLESS web mode is on?
 	// Or maybe web mode is a separate blocking call.
 	if *webMode {
-		go startWebServer() // Run web server in a goroutine
+		go startWebServer(*port) // Run web server in a goroutine
 	}
 
 	logger := log.New(os.Stdout, "", log.LstdFlags)

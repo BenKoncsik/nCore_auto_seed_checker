@@ -30,6 +30,7 @@ This is a GO application designed as an automatic seed checker for the nCore.pro
    - **Web Interface:** 
      `./ncore_automation -u user -p pass -o ./torrents -web`
      Open [http://localhost:8080](http://localhost:8080) to view history.
+     You can change the port with `-port 9090`.
    - **Continuous Mode (Every 10 min):**
      `./ncore_automation -u user -p pass -o ./torrents -web -interval 10m`
 
@@ -72,6 +73,7 @@ Ez egy nCore.pro oldalhoz készült automatikus seed checker GO alkalmazás.
    - **Web felület:** 
      `./ncore_automation -u user -p pass -o ./torrents -web`
      Megtekintheted a [http://localhost:8080](http://localhost:8080) címen.
+     A portot a `-port 9090` kapcsolóval módosíthatod.
    - **Folyamatos futtatás (10 percenként):**
      `./ncore_automation -u user -p pass -o ./torrents -web -interval 10m`
 
