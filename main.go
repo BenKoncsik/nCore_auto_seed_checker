@@ -58,6 +58,7 @@ func main() {
 	}
 
 	// Start Chrome
+	logger.Println("Starting application...")
 	ctx, cancel := chromedp.NewContext(context.Background(), chromedp.WithLogf(logger.Printf))
 	defer cancel()
 
@@ -66,6 +67,7 @@ func main() {
 	defer cancel()
 
 	// Log in to nCore
+	logger.Println("Attempting to log in...")
 	var body string
 	err = chromedp.Run(ctx,
 		chromedp.Navigate(loginUrl),
