@@ -20,12 +20,18 @@ This is a GO application designed as an automatic seed checker for the nCore.pro
    - Required dependencies:
       - `go get github.com/chromedp/chromedp`
       - `go get github.com/chromedp/cdproto/cdp`
-   - On Windows: `go build -o ncore_automation.exe main.go`
-   - On Linux: `go build -o ncore_automation main.go`
+   - On Windows: `go build -o ncore_automation.exe .`
+   - On Linux/Mac: `go build -o ncore_automation .`
    - Run the above command in the directory where the downloaded file is located.
 
 5. **Running the Application:**
-   - The program can now be run or scheduled, depending on the user's choice. 😄
+   - **One-time Run:** 
+     `./ncore_automation -u user -p pass -o ./torrents`
+   - **Web Interface:** 
+     `./ncore_automation -u user -p pass -o ./torrents -web`
+     Open [http://localhost:8080](http://localhost:8080) to view history.
+   - **Continuous Mode (Every 10 min):**
+     `./ncore_automation -u user -p pass -o ./torrents -web -interval 10m`
 
    Use the `-d` flag to enable logging to `log.txt`.
 
@@ -56,14 +62,20 @@ Ez egy nCore.pro oldalhoz készült automatikus seed checker GO alkalmazás.
    - Szükséges kiegészítők:
       - go get github.com/chromedp/chromedp
       - go get github.com/chromedp/cdproto/cdp 
-   - Windows rendszeren: `go build -o ncore_automation.exe main.go`
-   - Linux rendszeren: `go build -o ncore_automation main.go`
+   - Windows rendszeren: `go build -o ncore_automation.exe .`
+   - Linux/Mac rendszeren: `go build -o ncore_automation .`
    - Futtasd le a fenti parancsot a letöltött fájl mappájában.
 
-6. **Alkalmazás futtatása:**
-   - A program ezután már futtatható vagy ütemezhető, ez már a felhasználó választása. 😄
+5. **Alkalmazás futtatása:**
+   - **Egyszeri futtatás:**
+     `./ncore_automation -u user -p pass -o ./torrents`
+   - **Web felület:** 
+     `./ncore_automation -u user -p pass -o ./torrents -web`
+     Megtekintheted a [http://localhost:8080](http://localhost:8080) címen.
+   - **Folyamatos futtatás (10 percenként):**
+     `./ncore_automation -u user -p pass -o ./torrents -web -interval 10m`
 
--d kapcsolóval log.txt-be logol
+`-d` kapcsolóval log.txt-be logol
 
 ---
 
