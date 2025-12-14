@@ -59,6 +59,10 @@ func main() {
 		Logger:    logger,
 	}
 
+	if err := CheckAndInstallLynx(); err != nil {
+		logger.Fatalf("Error ensuring Lynx is installed: %v", err)
+	}
+
 	logger.Println("Starting application...")
 
 	// Helper to run one check
