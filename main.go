@@ -59,8 +59,8 @@ func main() {
 		Logger:    logger,
 	}
 
-	if err := CheckAndInstallLynx(); err != nil {
-		logger.Fatalf("Error ensuring Lynx is installed: %v", err)
+	if err := CheckAndInstallDependencies(); err != nil {
+		logger.Fatalf("Error ensuring dependencies (curl) are installed: %v", err)
 	}
 
 	logger.Println("Starting application...")

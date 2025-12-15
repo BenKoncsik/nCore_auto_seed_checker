@@ -1,0 +1,1 @@
+.ncore.pro	TRUE	/	FALSE	1983000000	nick	kobede01

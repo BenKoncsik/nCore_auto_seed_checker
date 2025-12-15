@@ -22,6 +22,8 @@ type Checker struct {
 	Logger    *log.Logger
 }
 
+const userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
 func (c *Checker) Run() RunRecord {
 	startTime := time.Now()
 	record := RunRecord{
@@ -58,32 +60,28 @@ func (c *Checker) Run() RunRecord {
 }
 
 func (c *Checker) getCookieFile() string {
-	return "cookies.txt"
+	cwd, _ := os.Getwd()
+	return filepath.Join(cwd, "cookies.txt")
 }
 
-func (c *Checker) runLynx(args ...string) (string, error) {
-	// Add default args for non-interactive mode
-	// -accept_all_cookies: automatically accept cookies
-	// -cookie_save_file: where to save cookies
-	// -cookie_file: where to read cookies from
-	cookieFile := c.getCookieFile()
+func (c *Checker) runCurl(args ...string) (string, error) {
+	// Base args for curl
+	// -s: silent (no progress bar)
+	// -L: follow redirects
+	// -A: user agent
 	baseArgs := []string{
-		"-accept_all_cookies",
-		"-cookie_save_file=" + cookieFile,
-		"-cookie_file=" + cookieFile,
-		"-width=200", // Ensure wide output to avoid wrapping issues in dumps if we used -dump, less relevant for -source
+		"-s",
+		"-L",
+		"-A", userAgent,
 	}
 
 	finalArgs := append(baseArgs, args...)
 
 	if c.Debug {
-		c.Logger.Printf("Running lynx with args: %v", finalArgs)
+		c.Logger.Printf("Running curl with args: %v", finalArgs)
 	}
 
-	cmd := exec.Command("lynx", finalArgs...)
-
-	// If we are posting data, we need to handle it separately, but here we assume args capture most needs.
-	// For raw POST data, we might need to pipe to stdin. See login method.
+	cmd := exec.Command("curl", finalArgs...)
 
 	var out bytes.Buffer
 	var stderr bytes.Buffer
@@ -91,80 +89,70 @@ func (c *Checker) runLynx(args ...string) (string, error) {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		c.Logger.Printf("Lynx error info: %s", stderr.String())
-		return "", fmt.Errorf("lynx execution failed: %w", err)
+		c.Logger.Printf("Curl error info: %s", stderr.String())
+		return "", fmt.Errorf("curl execution failed: %w", err)
 	}
 
 	return out.String(), nil
 }
 
 func (c *Checker) login() error {
-	c.Logger.Println("Attempting to log in...")
-
-	// Construct the post data
-	// nCore login usually expects 'nev' and 'pass'
-	postData := fmt.Sprintf("nev=%s&pass=%s&ne_leptessen_ki=1", c.User, c.Pass)
+	c.Logger.Println("Attempting to log in via cURL...")
 
 	cookieFile := c.getCookieFile()
+	postData := fmt.Sprintf("nev=%s&pass=%s&ne_leptessen_ki=1", c.User, c.Pass)
 
-	// We use -post_data. Lynx expects the data on stdin.
+	// -c: save cookies (cookie jar)
+	// -d: post data
 	args := []string{
-		"-accept_all_cookies",
-		"-cookie_save_file=" + cookieFile,
-		"-cookie_file=" + cookieFile,
-		"-post_data",
-		"-source", // We want the source HTML to check if login succeeded
+		"-c", cookieFile,
+		"-d", postData,
 		loginUrl,
 	}
 
-	cmd := exec.Command("lynx", args...)
-	cmd.Stdin = strings.NewReader(postData)
-
-	var out bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		c.Logger.Printf("Lynx login error info: %s", stderr.String())
-		return fmt.Errorf("login command failed: %w", err)
+	// Login usually follows redirect to index.php or similar
+	body, err := c.runCurl(args...)
+	if err != nil {
+		return err
 	}
 
-	body := out.String()
-
-	if !strings.Contains(body, c.User) {
-		// Just debug check, sometimes raw source might be different, but usually nCore shows username on top right
-		// c.Logger.Println("Login response body preview:", body[:500])
-		// Actually, let's look for "kilépés" or something that indicates we are logged in.
-		// Or just trust the cookies?
-		// Let's stick to the previous check:
-		// if !strings.Contains(body, c.User) { ... }
-		// But note that lynx -source returns the raw HTML.
-
-		// If login redirects, lynx might follow it?
-		// Standard lynx behavior with post_data:
-		// "lynx -post_data ... URL"
-		// If it's a 302, Lynx might follow or show "Data transfer complete".
-
-		// Let's relax the check slightly or look for the redirect/success indicator.
-		// If we are on hitnrun.php immediately (because of honnan param), we might see "Aktivitás" or similar.
-		// Or just check that we DIDNT get the login page again.
-		if strings.Contains(body, "name=\"pass\"") { // Login form still present
-			c.Logger.Println("Login failed, form still present.")
-			return fmt.Errorf("login failed, found login form")
-		}
+	// Basic check if login succeeded
+	if strings.Contains(body, "name=\"pass\"") { // Login form still present
+		c.Logger.Println("Login failed, form still present in response.")
+		return fmt.Errorf("login failed (bad credentials?)")
 	}
 
-	c.Logger.Println("Login successfully executed (cookies saved).")
+	c.Logger.Println("Login request completed.")
 	return nil
 }
 
 func (c *Checker) checkActivity() ([]string, error) {
 	c.Logger.Println("Opening activity page...")
 
-	body, err := c.runLynx("-source", activityUrl)
+	cookieFile := c.getCookieFile()
+	// -b: read cookies
+	// -c: write cookies (update session if needed)
+	args := []string{
+		"-b", cookieFile,
+		"-c", cookieFile,
+		activityUrl,
+	}
+
+	body, err := c.runCurl(args...)
 	if err != nil {
 		return nil, err
+	}
+
+	if strings.Contains(body, "name=\"pass\"") {
+		c.Logger.Println("Activity page shows login form. Session lost.")
+		if c.Debug {
+			snippet := body
+			if len(snippet) > 500 {
+				snippet = snippet[:500]
+			}
+			c.Logger.Printf("DEBUG: HTML Snippet:\n%s", snippet)
+		}
+		return nil, fmt.Errorf("authentication failed")
 	}
 
 	c.Logger.Println("Analyzing HTML to find torrents with 'Stopped' status...")
@@ -194,7 +182,6 @@ func (c *Checker) checkActivity() ([]string, error) {
 	}
 	f(doc)
 
-	// Log matches
 	c.Logger.Printf("Found %d rows with 'Stopped' status.", len(matches))
 	for i, div := range matches {
 		c.Logger.Printf("Found div #%d:\n%s\n\n", i+1, div)
@@ -228,24 +215,25 @@ func (c *Checker) processMatches(matches []string) []string {
 }
 
 func (c *Checker) downloadTorrent(torrentUrl string, match string) (string, error) {
-	body, err := c.runLynx("-source", torrentUrl)
+	cookieFile := c.getCookieFile()
+	args := []string{
+		"-b", cookieFile,
+		"-c", cookieFile,
+		torrentUrl,
+	}
+
+	body, err := c.runCurl(args...)
 	if err != nil {
 		c.Logger.Println("Error opening the page:", err)
 		return "", err
 	}
 
-	// Search for filename in the match first (from activity page), or in the details page
 	fileNameRegex := regexp.MustCompile(`<a[^>]*title="([^"]+)"`)
 	fileNameMatch := fileNameRegex.FindStringSubmatch(match)
 
 	rawFileName := "unknown_torrent"
 	if len(fileNameMatch) >= 2 {
 		rawFileName = fileNameMatch[1]
-	} else {
-		// Try to find it in the details page body as a backup
-		// Looking for <div class="torrent_reszletek_cim">Title</div> or similar
-		// But let's trust the regex for now or fallback
-		c.Logger.Println("Could not find filename in match snippet, using generic name")
 	}
 
 	linkRegex := regexp.MustCompile(`<div class="download">.*?<a [^>]*href="(torrents\.php\?action=download[^"]*)"`)
@@ -262,6 +250,9 @@ func (c *Checker) downloadTorrent(torrentUrl string, match string) (string, erro
 		}
 		return finalName, nil
 	}
+	if strings.Contains(body, "name=\"pass\"") {
+		return "", fmt.Errorf("authentication failed on details page")
+	}
 	return "", fmt.Errorf("download link not found")
 }
 
@@ -274,15 +265,25 @@ func (c *Checker) downloadFile(downloadUrl string, fileName string) error {
 		return name
 	}
 
-	c.Logger.Println("Downloading file via Lynx to stdout...", downloadUrl)
+	c.Logger.Println("Downloading file via cURL...", downloadUrl)
 
-	// Use lynx -source to get the binary content
-	content, err := c.runLynx("-source", downloadUrl)
+	cookieFile := c.getCookieFile()
+	// Download only, write to stdout for capture
+	args := []string{
+		"-b", cookieFile,
+		"-c", cookieFile,
+		downloadUrl,
+	}
+
+	content, err := c.runCurl(args...)
 	if err != nil {
 		return err
 	}
 
-	// Create output directory
+	if strings.HasPrefix(strings.TrimSpace(content), "<!DOCTYPE") || strings.Contains(content, "<html") {
+		return fmt.Errorf("downloaded content appears to be HTML, likely failed auth or invalid link")
+	}
+
 	if err := os.MkdirAll(c.OutputDir, os.ModePerm); err != nil {
 		return err
 	}
