@@ -76,6 +76,10 @@ func main() {
 				logger.Println("Failed to save run record:", err)
 			} else {
 				logger.Println("Run recorded to history.json")
+				// Broadcast to connected web clients
+				if *webMode {
+					BroadcastUpdate()
+				}
 			}
 		}
 	}
